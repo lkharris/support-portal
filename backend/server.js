@@ -92,28 +92,28 @@ app.get('/api/knowledge/articles/:categoryName', async (req, res) => {
     `;
     const result = await conn.query(query);
     res.json(result.records);
-  } catch (err) {
-    console.error('Error fetching articles for category:', categoryName, err.message);
-    res.status(500).json({ error: `Failed to fetch articles for category ${categoryName}` });
-  }
-});
+// Endpoint to get open cases for a specific contact email
+app.get('/api/cases/:email', async (req, res) => {
+    if (!conn.accessToken) {
+        return res.status(401).json({ error: 'Salesforce not connected' });
+    }
+    const { email } = req.params;
 
-// GET A SINGLE ARTICLE'S DETAILS
-app.get('/api/knowledge/article/:urlName', async (req, res) => {
-    const { urlName } = req.params;
+    // --- QUERY MODIFICATION ---
+    // Previously, this query used "IsClosed = false".
+    // We are changing it to look at the Status field directly, which is more flexible.
+    // This will now fetch any case that does not have the status of 'Closed'.
+    // You can customize this list, e.g., AND Status NOT IN ('Closed', 'Resolved', 'Cancelled')
+    const soql = `
+      SELECT Id, CaseNumber, Subject, Description, Status, CreatedDate 
+      FROM Case 
+      WHERE Contact.Email = '${email}' AND Status != 'Closed'
+      ORDER BY CreatedDate DESC
+    `;
+
     try {
-        // NOTE: Ensure you have a custom rich text field named 'Article_Content__c' on your Knowledge object
-        const query = `
-          SELECT Title, Summary, Article_Content__c 
-          FROM Knowledge__kav 
-          WHERE UrlName = '${urlName}' AND PublishStatus='Online' AND Language='en_US'
-        `;
-        const result = await conn.query(query);
-        if (result.records.length > 0) {
-            res.json(result.records[0]);
-        } else {
-            res.status(404).json({ error: 'Article not found' });
-        }
+        const result = await conn.query(soql);
+        res.json(result.records);
     } catch (err) {
         console.error('Error fetching article:', urlName, err.message);
         res.status(500).json({ error: `Failed to fetch article ${urlName}` });
