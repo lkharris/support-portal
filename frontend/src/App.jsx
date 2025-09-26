@@ -32,7 +32,9 @@ function App() {
 // --- Main Components (Tabs) ---
 
 const SupportTab = () => {
-  const [categories, setCategories] = useState(null);
+  // This is the fix: Initialize categories with a safe, empty structure.
+  // This prevents the '.map' error even if the API response is unusual.
+  const [categories, setCategories] = useState({ topCategories: [] });
   const [articles, setArticles] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,13 +47,12 @@ const SupportTab = () => {
       setError('');
       try {
         const response = await axios.get(`${API_BASE_URL}/knowledge/categories`);
-        // This is the fix: We now validate the data from the API.
-        // If the data doesn't have the expected 'topCategories' property, we'll throw an error.
-        if (response.data && response.data.topCategories) {
+        // Validate that the response has the expected structure.
+        if (response.data && Array.isArray(response.data.topCategories)) {
           setCategories(response.data);
         } else {
           // This will happen if the backend sends an error or unexpected data.
-          throw new Error("Invalid data structure received from the server. Check the backend logs or network tab.");
+          throw new Error("Invalid data structure for categories received from the server.");
         }
       } catch (err) {
         setError('Could not load article categories. The backend API might be misconfigured or returning an error.');
@@ -70,7 +71,8 @@ const SupportTab = () => {
     setSelectedCategory(category.label);
     try {
       const response = await axios.get(`${API_BASE_URL}/knowledge/articles/${category.name}`);
-      setArticles(response.data);
+      // Add validation to ensure articles are always an array.
+      setArticles(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       setError(`Could not load articles for ${category.label}.`);
       console.error(err);
@@ -95,14 +97,11 @@ const SupportTab = () => {
 
   if (error) return <ErrorMessage message={error} />;
   
-  // This JSX check is also more robust now.
-  if (isLoading || !categories || !categories.topCategories) return <div className="flex justify-center p-8"><Spinner /></div>;
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
       <aside className="lg:col-span-1 bg-white p-6 rounded-lg shadow-sm">
         <h2 className="text-xl font-bold mb-4 flex items-center"><BookOpen className="mr-2 h-5 w-5 text-sky-600"/> Categories</h2>
-        <CategoryTree tree={categories} onSelect={handleCategorySelect} />
+        {isLoading ? <Spinner/> : <CategoryTree tree={categories} onSelect={handleCategorySelect} />}
       </aside>
 
       <div className="lg:col-span-3">
@@ -236,26 +235,33 @@ const TabButton = ({ name, activeTab, setActiveTab, icon }) => (
   </button>
 );
 
-const CategoryTree = ({ tree, onSelect }) => (
-  <ul>
-    {tree.topCategories.map(category => (
-      <li key={category.name} className="my-1">
-        <button onClick={() => onSelect(category)} className="font-semibold text-slate-700 hover:text-sky-600 flex items-center text-left">
-          <ChevronsRight className="h-4 w-4 mr-1 flex-shrink-0" /> {category.label}
-        </button>
-        {category.childCategories && (
-          <ul className="pl-5 mt-1 border-l-2 border-slate-200">
-            {category.childCategories.map(child => (
-              <li key={child.name} className="my-1">
-                <button onClick={() => onSelect(child)} className="text-slate-600 hover:text-sky-600">{child.label}</button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </li>
-    ))}
-  </ul>
-);
+const CategoryTree = ({ tree, onSelect }) => {
+    // This component is now safe because the `tree` prop is guaranteed to have `topCategories`.
+    if (!tree.topCategories || tree.topCategories.length === 0) {
+        return <p className="text-slate-500">No categories found.</p>
+    }
+
+    return (
+      <ul>
+        {tree.topCategories.map(category => (
+          <li key={category.name} className="my-1">
+            <button onClick={() => onSelect(category)} className="font-semibold text-slate-700 hover:text-sky-600 flex items-center text-left">
+              <ChevronsRight className="h-4 w-4 mr-1 flex-shrink-0" /> {category.label}
+            </button>
+            {category.childCategories && category.childCategories.length > 0 && (
+              <ul className="pl-5 mt-1 border-l-2 border-slate-200">
+                {category.childCategories.map(child => (
+                  <li key={child.name} className="my-1">
+                    <button onClick={() => onSelect(child)} className="text-slate-600 hover:text-sky-600">{child.label}</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+};
 
 const ArticleList = ({ articles, onSelect, isLoading, category }) => (
     <div className="bg-white p-6 rounded-lg shadow-sm">
@@ -304,7 +310,8 @@ const CaseList = () => {
             }
             try {
                 const response = await axios.get(`${API_BASE_URL}/cases/${LOGGED_IN_USER_EMAIL}`);
-                setCases(response.data);
+                // Add validation to ensure cases are always an array.
+                setCases(Array.isArray(response.data) ? response.data : []);
             } catch (err) {
                 setError('Could not load your open cases.');
                 console.error(err);
@@ -456,3 +463,4 @@ const ErrorMessage = ({ message }) => (
 
 
 export default App;
+
