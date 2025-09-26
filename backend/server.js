@@ -71,11 +71,20 @@ app.get('/api/knowledge/categories', async (req, res) => {
     const dataCategoryGroups = await conn.knowledge.getDataCategoryGroups(['Knowledge']);
     // This check handles the case where no knowledge base is set up.
     if (!dataCategoryGroups || dataCategoryGroups.length === 0) {
+        console.log("No 'Knowledge' data category group found.");
         return res.json({ topCategories: [] });
     }
     const categoryGroup = dataCategoryGroups[0];
     const tree = await conn.knowledge.getCategoryTree(categoryGroup.name, { depth: 4 });
-    res.json(tree);
+
+    // If the tree is returned but has no topCategories (e.g., empty knowledge base),
+    // ensure we send a consistent, valid response to the frontend.
+    if (tree && tree.topCategories) {
+        res.json(tree);
+    } else {
+        console.log("Knowledge category tree is empty or invalid. Returning default empty structure.");
+        res.json({ topCategories: [] });
+    }
   } catch (err) {
     console.error('Error fetching knowledge categories:', err.message);
     res.status(500).json({ error: 'Failed to fetch knowledge categories' });
@@ -216,20 +225,5 @@ app.post('/api/search', async (req, res) => {
         
         res.json({ answer: text, sources: articles });
 
-    } catch (err) {
-        console.error('Error in semantic search:', err.message);
-        res.status(500).json({ error: 'Failed to perform search' });
-    }
-});
-
-// When running on Vercel, the file itself is the server.
-// For local development, we need to tell it to listen on a port.
-if (process.env.NODE_ENV !== 'production') {
-  const port = 3001;
-  app.listen(port, () => {
-    console.log(`Backend server listening at http://localhost:${port}`);
-  });
-}
-
-module.exports = app;
+    } catch (err)
 
