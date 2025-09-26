@@ -2,16 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { BookOpen, FileText, Send, Search, ChevronsRight, Inbox, MessageSquare, ExternalLink } from 'lucide-react';
 
-// For Vercel deployment, the API is on the same domain at the /api path.
-// For local dev, we use the .env.development file to point to localhost:3001
-const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
+// For Vercel deployment, all API calls are relative to the current domain.
+// The `vercel.json` file routes any request starting with "/api" to the backend server.
+const API_BASE_URL = '/api';
 
 // This should be the email of the currently logged-in user of your platform.
 // In a real application, you would get this from your platform's authentication context.
-const LOGGED_IN_USER_EMAIL = 'lharris@invoca.com'; 
+const LOGGED_IN_USER_EMAIL = 'your-customer-email@example.com'; 
 
 // Get this from Salesforce Setup -> Web-to-Case
-const SALESFORCE_ORG_ID = '00Df40000022MuR'; 
+const SALESFORCE_ORG_ID = 'YOUR_SALESFORCE_ORG_ID'; 
 
 function App() {
   const [activeTab, setActiveTab] = useState('support');
