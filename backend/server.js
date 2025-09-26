@@ -48,10 +48,12 @@ const conn = new jsforce.Connection({
 // Log in to Salesforce once when the server starts
 conn.login(process.env.SF_USERNAME, process.env.SF_PASSWORD, (err, userInfo) => {
   if (err) {
-    return console.error('Salesforce login error:', err);
+    // This is the most critical log. If this appears, the credentials are wrong.
+    console.error('Salesforce login error:', err);
+  } else {
+    console.log('Successfully connected to Salesforce as user ID:', userInfo.id);
+    console.log('Org ID:', userInfo.organizationId);
   }
-  console.log('Successfully connected to Salesforce as user ID:', userInfo.id);
-  console.log('Org ID:', userInfo.organizationId);
 });
 
 // --- Gemini AI Initialization ---
@@ -61,15 +63,17 @@ const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
 // --- API Routes (all prefixed with /api/ in vercel.json) ---
 
+// NEW: Health check endpoint for debugging
 app.get('/api/healthcheck', (req, res) => {
-  res.status(200).send('OK');
+  console.log('Health check endpoint was hit successfully!');
+  res.status(200).send('Backend is running and accessible.');
 });
 
 // GET KNOWLEDGE DATA CATEGORY HIERARCHY
 app.get('/api/knowledge/categories', async (req, res) => {
+  console.log('Attempting to fetch knowledge categories...');
   try {
     const dataCategoryGroups = await conn.knowledge.getDataCategoryGroups(['Knowledge']);
-    // This check handles the case where no knowledge base is set up.
     if (!dataCategoryGroups || dataCategoryGroups.length === 0) {
         console.log("No 'Knowledge' data category group found.");
         return res.json({ topCategories: [] });
@@ -77,12 +81,10 @@ app.get('/api/knowledge/categories', async (req, res) => {
     const categoryGroup = dataCategoryGroups[0];
     const tree = await conn.knowledge.getCategoryTree(categoryGroup.name, { depth: 4 });
 
-    // If the tree is returned but has no topCategories (e.g., empty knowledge base),
-    // ensure we send a consistent, valid response to the frontend.
     if (tree && tree.topCategories) {
         res.json(tree);
     } else {
-        console.log("Knowledge category tree is empty or invalid. Returning default empty structure.");
+        console.log("Knowledge category tree is empty. Returning default empty structure.");
         res.json({ topCategories: [] });
     }
   } catch (err) {
@@ -94,6 +96,7 @@ app.get('/api/knowledge/categories', async (req, res) => {
 // GET ARTICLES FOR A SPECIFIC CATEGORY
 app.get('/api/knowledge/articles/:categoryName', async (req, res) => {
   const { categoryName } = req.params;
+  console.log(`Attempting to fetch articles for category: ${categoryName}`);
   try {
     const query = `
       SELECT Id, Title, UrlName, Summary 
@@ -104,6 +107,7 @@ app.get('/api/knowledge/articles/:categoryName', async (req, res) => {
       LIMIT 20
     `;
     const result = await conn.query(query);
+    console.log(`Found ${result.records.length} articles for ${categoryName}.`);
     res.json(result.records);
   } catch (err) {
     console.error('Error fetching articles:', categoryName, err.message);
@@ -114,6 +118,7 @@ app.get('/api/knowledge/articles/:categoryName', async (req, res) => {
 // GET ARTICLE DETAIL BY URLNAME
 app.get('/api/knowledge/article/:urlName', async (req, res) => {
   const { urlName } = req.params;
+  console.log(`Attempting to fetch article detail for: ${urlName}`);
   try {
     const query = `
       SELECT Title, Summary, Article_Content__c
@@ -123,11 +128,7 @@ app.get('/api/knowledge/article/:urlName', async (req, res) => {
       LIMIT 1
     `;
     const result = await conn.query(query);
-    if (result.records.length > 0) {
-      res.json(result.records[0]);
-    } else {
-      res.status(404).json({ error: 'Article not found.' });
-    }
+    res.json(result.records[0] || null);
   } catch (err) {
     console.error('Error fetching article detail:', urlName, err.message);
     res.status(500).json({ error: `Failed to fetch article detail for ${urlName}` });
@@ -137,12 +138,11 @@ app.get('/api/knowledge/article/:urlName', async (req, res) => {
 // GET OPEN CASES FOR A CONTACT EMAIL
 app.get('/api/cases/:email', async (req, res) => {
   const { email } = req.params;
+  console.log(`Attempting to fetch cases for email: ${email}`);
   if (!email) {
     return res.status(400).json({ error: 'Email parameter is required.' });
   }
   try {
-    // This more robust query checks BOTH the related Contact's email
-    // AND the Case's own email field (SuppliedEmail).
     const query = `
       SELECT Id, CaseNumber, Subject, Status, CreatedDate, Description 
       FROM Case 
@@ -151,6 +151,7 @@ app.get('/api/cases/:email', async (req, res) => {
       ORDER BY CreatedDate DESC
     `;
     const result = await conn.query(query);
+    console.log(`Query for email ${email} found ${result.records.length} cases.`);
     res.json(result.records);
   } catch (err) {
     console.error('Error fetching cases for email:', email, err.message);
@@ -162,6 +163,7 @@ app.get('/api/cases/:email', async (req, res) => {
 app.post('/api/cases/:caseId/reply', async (req, res) => {
     const { caseId } = req.params;
     const { commentBody, isPublic } = req.body;
+    console.log(`Attempting to post reply to case: ${caseId}`);
 
     if (!commentBody) {
         return res.status(400).json({ error: 'commentBody is required.' });
@@ -171,8 +173,9 @@ app.post('/api/cases/:caseId/reply', async (req, res) => {
         const result = await conn.sobject('CaseComment').create({
             ParentId: caseId,
             CommentBody: commentBody,
-            IsPublished: isPublic || false, // Make comment visible to contact if portal is enabled
+            IsPublished: isPublic || false,
         });
+        console.log(`Successfully posted reply to case: ${caseId}`);
         res.status(201).json(result);
     } catch (err) {
         console.error('Error posting case comment:', err.message);
@@ -183,27 +186,26 @@ app.post('/api/cases/:caseId/reply', async (req, res) => {
 // SEARCH KNOWLEDGE ARTICLES (WITH GEMINI)
 app.post('/api/search', async (req, res) => {
     const { searchTerm } = req.body;
+    console.log(`Performing search for term: "${searchTerm}"`);
     if (!searchTerm) {
         return res.status(400).json({ error: 'searchTerm is required.' });
     }
 
     try {
-        // 1. Rudimentary search in Salesforce to get candidate articles
         const soslQuery = `
           FIND {*${searchTerm}*} IN ALL FIELDS 
           RETURNING Knowledge__kav(Id, Title, Summary, UrlName WHERE PublishStatus='Online' AND Language='en_US' LIMIT 10)
         `;
         const soslResult = await conn.search(soslQuery);
         const articles = soslResult.searchRecords;
+        console.log(`Found ${articles.length} candidate articles from SOSL search.`);
 
         if (!articles || articles.length === 0) {
             return res.json({ answer: "I couldn't find any articles related to your search.", sources: [] });
         }
         
-        // 2. Prepare context for Gemini
         const context = articles.map(art => `Title: ${art.Title}\nSummary: ${art.Summary}`).join('\n\n---\n\n');
         
-        // 3. Call Gemini API
         const prompt = `
             Based on the following knowledge base articles, please answer the user's question. 
             Provide a concise, helpful answer and cite the titles of the articles you used.
@@ -225,5 +227,20 @@ app.post('/api/search', async (req, res) => {
         
         res.json({ answer: text, sources: articles });
 
-    } catch (err)
+    } catch (err) {
+        console.error('Error in semantic search:', err.message);
+        res.status(500).json({ error: 'Failed to perform search' });
+    }
+});
+
+// When running on Vercel, the file itself is the server.
+// For local development, we need to tell it to listen on a port.
+if (process.env.NODE_ENV !== 'production') {
+  const port = 3001;
+  app.listen(port, () => {
+    console.log(`Backend server listening at http://localhost:${port}`);
+  });
+}
+
+module.exports = app;
 
