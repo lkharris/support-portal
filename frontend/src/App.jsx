@@ -41,12 +41,21 @@ const SupportTab = () => {
 
   useEffect(() => {
     const fetchCategories = async () => {
+      setIsLoading(true);
+      setError('');
       try {
         const response = await axios.get(`${API_BASE_URL}/knowledge/categories`);
-        setCategories(response.data);
+        // This is the fix: We now validate the data from the API.
+        // If the data doesn't have the expected 'topCategories' property, we'll throw an error.
+        if (response.data && response.data.topCategories) {
+          setCategories(response.data);
+        } else {
+          // This will happen if the backend sends an error or unexpected data.
+          throw new Error("Invalid data structure received from the server. Check the backend logs or network tab.");
+        }
       } catch (err) {
-        setError('Could not load article categories.');
-        console.error(err);
+        setError('Could not load article categories. The backend API might be misconfigured or returning an error.');
+        console.error("Error details:", err);
       } finally {
         setIsLoading(false);
       }
@@ -85,12 +94,15 @@ const SupportTab = () => {
   }, []);
 
   if (error) return <ErrorMessage message={error} />;
+  
+  // This JSX check is also more robust now.
+  if (isLoading || !categories || !categories.topCategories) return <div className="flex justify-center p-8"><Spinner /></div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
       <aside className="lg:col-span-1 bg-white p-6 rounded-lg shadow-sm">
         <h2 className="text-xl font-bold mb-4 flex items-center"><BookOpen className="mr-2 h-5 w-5 text-sky-600"/> Categories</h2>
-        {categories ? <CategoryTree tree={categories} onSelect={handleCategorySelect} /> : <Spinner />}
+        <CategoryTree tree={categories} onSelect={handleCategorySelect} />
       </aside>
 
       <div className="lg:col-span-3">
@@ -444,4 +456,3 @@ const ErrorMessage = ({ message }) => (
 
 
 export default App;
-
