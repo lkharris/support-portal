@@ -69,7 +69,11 @@ app.get('/api/healthcheck', (req, res) => {
 app.get('/api/knowledge/categories', async (req, res) => {
   try {
     const dataCategoryGroups = await conn.knowledge.getDataCategoryGroups(['Knowledge']);
-    const categoryGroup = dataCategoryGroups[0]; // Assuming 'Knowledge' is your main group
+    // This check handles the case where no knowledge base is set up.
+    if (!dataCategoryGroups || dataCategoryGroups.length === 0) {
+        return res.json({ topCategories: [] });
+    }
+    const categoryGroup = dataCategoryGroups[0];
     const tree = await conn.knowledge.getCategoryTree(categoryGroup.name, { depth: 4 });
     res.json(tree);
   } catch (err) {
@@ -128,11 +132,13 @@ app.get('/api/cases/:email', async (req, res) => {
     return res.status(400).json({ error: 'Email parameter is required.' });
   }
   try {
-    // This query correctly looks at the related Contact's email and the case Status.
+    // This more robust query checks BOTH the related Contact's email
+    // AND the Case's own email field (SuppliedEmail).
     const query = `
       SELECT Id, CaseNumber, Subject, Status, CreatedDate, Description 
       FROM Case 
-      WHERE Contact.Email = '${email}' AND Status != 'Closed'
+      WHERE (Contact.Email = '${email}' OR SuppliedEmail = '${email}') 
+      AND Status != 'Closed'
       ORDER BY CreatedDate DESC
     `;
     const result = await conn.query(query);
