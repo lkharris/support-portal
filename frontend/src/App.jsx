@@ -8,10 +8,10 @@ const API_BASE_URL = '/api';
 
 // This should be the email of the currently logged-in user of your platform.
 // In a real application, you would get this from your platform's authentication context.
-const LOGGED_IN_USER_EMAIL = 'your-customer-email@example.com'; 
+const LOGGED_IN_USER_EMAIL = 'lharris@invoca.com'; 
 
 // Get this from Salesforce Setup -> Web-to-Case
-const SALESFORCE_ORG_ID = 'YOUR_SALESFORCE_ORG_ID'; 
+const SALESFORCE_ORG_ID = '00Df40000022MuR'; 
 
 function App() {
   const [activeTab, setActiveTab] = useState('support');
