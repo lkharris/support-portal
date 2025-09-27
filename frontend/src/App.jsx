@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { BookOpen, FileText, Send, Search, ChevronsRight, Inbox, MessageSquare, ExternalLink } from 'lucide-react';
+import { BookOpen, Send, Search, ChevronsRight, Inbox, MessageSquare } from 'lucide-react';
 
 // For Vercel deployment, all API calls are relative to the current domain.
 // The `vercel.json` file routes any request starting with "/api" to the backend server.
