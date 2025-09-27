@@ -7,7 +7,6 @@
     "backend"
   ],
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
     "dev:frontend": "npm start --workspace=frontend",
     "dev:backend": "npm start --workspace=backend",
     "install:all": "npm install && npm install --workspace=frontend && npm install --workspace=backend"
